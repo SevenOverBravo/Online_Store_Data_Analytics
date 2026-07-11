@@ -10,9 +10,9 @@ CREATE TABLE `olist`.`orders` (
   `order_status` VARCHAR(45) NULL,
   `order_purchase_timestamp` DATETIME NULL,
   `order_approved_at` DATETIME NULL,
-  `order_delivered_carrier_date` DATETIME NULL DEFAULT NULL,
-  `order_delivery_customer_date` DATETIME NULL DEFAULT NULL,
-  `order_estimated_delivery_date` DATETIME NULL DEFAULT NULL,
+  `order_delivered_carrier_date` DATETIME NULL,
+  `order_delivery_customer_date` DATETIME NULL,
+  `order_estimated_delivery_date` DATETIME NULL,
   PRIMARY KEY (`order_id`));
 
 -- Load Orders CSV Into Table --
@@ -23,20 +23,31 @@ ENCLOSED BY '"'
 LINES TERMINATED BY '\n'
 IGNORE 1 ROWS;
 
--- Reviews Table --
+-- Items Table --
 CREATE TABLE `olist`.`items` (
   `order_id` VARCHAR(45) NOT NULL,
-  `order_item_id` VARCHAR(45) NULL,
+  `order_item_id` INT NULL,
   `product_id` VARCHAR(45) NULL,
   `seller_id` VARCHAR(45) NULL,
   `shipping_limit_date` DATETIME NULL,
-  `price` INT NULL,
-  `freight_value` INT NULL,
+  `price` FLOAT NULL,
+  `freight_value` FLOAT NULL,
   PRIMARY KEY (`order_id`, `order_item_id`));
 
+-- Reviews Table -- 
+CREATE TABLE `olist`.`reviews` (
+  `review_id` VARCHAR(45) NOT NULL,
+  `order_id` VARCHAR(45) NOT NULL,
+  `review_score` INT NULL,
+  `review_comment_title` VARCHAR(512) NULL,
+  `review_comment_message` VARCHAR(512) NULL,
+  `review_creation_date` DATETIME NULL,
+  `review_answer_timestamp` DATETIME NULL,
+  PRIMARY KEY (`review_id`, `order_id`));
+
 -- Load Reviews CSV Into Table --
-LOAD DATA INFILE 'C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/olist_order_items_dataset.csv'
-INTO TABLE items
+LOAD DATA INFILE 'C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/olist_order_reviews_dataset.csv'
+INTO TABLE reviews
 FIELDS TERMINATED BY ',' 
 ENCLOSED BY '"'
 LINES TERMINATED BY '\n'
@@ -149,23 +160,24 @@ FROM (SELECT o.order_id, COUNT(i.order_item_id) AS NUM_ITEMS
 	  GROUP BY o.order_id) AS DIST
     -- Returns 1.142, but neglects any possible outliers in cities with low customer counts
 
--- Recalculate Average with Caveat: Remove orders associated with customers from cities with less than 20 customers overall
-WITH elligible_cities (customer_city) 
-AS (
-	SELECT customer_city
-    FROM customers
-    GROUP BY customer_city
-    HAVING COUNT(DISTINCT customer_id)>=20)
+-- Recalculate Average with Caveat: Remove orders associated with customers from cities with less than 20 orders overall
+WITH elligible_cities (customer_state, customer_city) AS (
+	SELECT c.customer_state, c.customer_city
+    FROM customers c
+		JOIN orders o ON c.customer_id=o.customer_id  
+		JOIN items i ON o.order_id=i.order_id
+    GROUP BY c.customer_state, c.customer_city
+    HAVING COUNT(DISTINCT o.order_id)>=20)
 SELECT AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
 FROM (SELECT c.customer_city, o.order_id, COUNT(i.order_item_id) AS NUM_ITEMS
 	  FROM customers c
 		JOIN orders o ON c.customer_id=o.customer_id
         JOIN items i ON o.order_id=i.order_id
-      WHERE c.customer_city IN (SELECT * FROM elligible_cities)
+      WHERE (c.customer_state, c.customer_city) IN (SELECT customer_state, customer_city FROM elligible_cities)
 	  GROUP BY c.customer_city, o.order_id) AS DIST
    -- Returns 1.144; Not significantly different from non-filtered counterpart
 
--- First: Confirm No Null/Improper Entries in Target Columns --
+-- Confirm No Null/Improper Entries in Target Columns --
 SELECT COUNT(zip_code_prefix) AS ZIP_NUM, COUNT(customer_city) AS CITY_NUM, COUNT(customer_state) AS STATE_NUM
 FROM customers
 WHERE (zip_code_prefix IS NOT NULL AND zip_code_prefix REGEXP '^[0-9]{4,5}$') -- Not Null and a sequence of 4 or 5 numbers
@@ -173,62 +185,67 @@ WHERE (zip_code_prefix IS NOT NULL AND zip_code_prefix REGEXP '^[0-9]{4,5}$') --
   AND (customer_state IS NOT NULL AND customer_state REGEXP '^[A-Z]{2}$'); -- Not Null and a sequence of 2 letters
   -- Output shows no row is invalid (Counts = Number of Rows)
 
--- Customer State: Average items ordered and Number of customers for each
-WITH elligible_cities (customer_state, customer_city) 
-AS (
-	SELECT customer_state, customer_city
-    FROM customers
-    GROUP BY customer_state, customer_city
-    HAVING COUNT(DISTINCT customer_id)>=20)
+-- Customer State: Average items ordered and Number of customers for each, removing states with less than 300 orders
+WITH elligible_states (customer_state) AS (
+	SELECT c.customer_state
+    FROM customers c
+		JOIN orders o ON c.customer_id=o.customer_id  
+		JOIN items i ON o.order_id=i.order_id
+    GROUP BY c.customer_state
+    HAVING COUNT(DISTINCT o.order_id)>=300)
 SELECT DIST.customer_state, COUNT(DIST.order_id) AS NUM_ORDERS, AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
 FROM (SELECT c.customer_state, c.customer_city, o.order_id, COUNT(i.order_item_id) AS NUM_ITEMS
 	  FROM customers c
 		JOIN orders o ON c.customer_id=o.customer_id
         JOIN items i ON o.order_id=i.order_id
-      WHERE (c.customer_state, c.customer_city) IN (SELECT customer_state, customer_city FROM elligible_cities)
-	  GROUP BY c.customer_state, c.customer_city, o.order_id) AS DIST
+      WHERE c.customer_state IN (SELECT * FROM elligible_states)
+	  GROUP BY c.customer_state, o.order_id) AS DIST
 GROUP BY DIST.customer_state
-  -- Output: Top 3 states in terms of average items per order (AIPO) are MT (1.193), GO (1.180), and PB (1.165); not much different from overall average of 1.144
-  -- Eight of the ten states with above-average AIPO have >300 orders; high sample size indicates accurate averages
+ORDER BY AVG_ITEMS_PER_ORDER DESC
+  -- Output: Top 3 states in terms of average items per order (AIPO) are MT (1.168), GO (1.162), and SC (1.156); not much different from overall average of 1.144
+  -- States with the highest number of orders (SP, RJ, and MG) coalesce around the overall AIPO 
   
--- Customer City: Average items ordered and Number of customers for each --
-WITH elligible_cities (customer_state, customer_city) 
-AS (
-	SELECT customer_state, customer_city
-    FROM customers
-    GROUP BY customer_state, customer_city
-    HAVING COUNT(DISTINCT customer_id)>=20)
+-- Customer City: Average items ordered and Number of customers for each, removing cities with less than 20 orders
+WITH elligible_cities (customer_state, customer_city) AS (
+	SELECT c.customer_state, c.customer_city
+    FROM customers c
+		JOIN orders o ON c.customer_id=o.customer_id  
+		JOIN items i ON o.order_id=i.order_id
+    GROUP BY c.customer_state, c.customer_city
+    HAVING COUNT(DISTINCT o.order_id)>=100)
 SELECT DIST.customer_state, DIST.customer_city, COUNT(DIST.order_id) AS NUM_ORDERS, AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
 FROM (SELECT c.customer_state, c.customer_city, o.order_id, COUNT(i.order_item_id) AS NUM_ITEMS
 	  FROM customers c
 		JOIN orders o ON c.customer_id=o.customer_id
         JOIN items i ON o.order_id=i.order_id
-      WHERE (c.customer_state, c.customer_city) IN (SELECT customer_state, customer_city FROM elligible_cities)
+      WHERE (c.customer_state, c.customer_city) IN (SELECT * FROM elligible_cities)
 	  GROUP BY c.customer_state, c.customer_city, o.order_id) AS DIST
 GROUP BY DIST.customer_state, DIST.customer_city
 ORDER BY AVG_ITEMS_PER_ORDER DESC
- -- Top 3 cities are Uniao da Vitoria (PR, AIPO = 1.621), Peruibe (SP, AIPO = 1.455), and Santana do Livramento (RS, AIPO = 1.450)
- -- In the Top 20 cities, eight are in SP, three in SC, two in RS, PR, and RJ, and one in MT, GO, and BA
- -- Accuracy of averages is less certain due to most sample sizes falling between 20 and 100
+ -- Top 3 cities are Pocos de Caldas (State = MG, AIPO = 1.269), Franca (State = SP, AIPO = 1.2689), and Chapeco (State = SC, AIPO = 1.223) 
+ -- In the Top 20 cities, six are in SP, three in SC and MG, two in RS and RJ, and one in MT, GO, PR, and BA
+ -- Many of the top AIPO cities have order counts just above 100; cities closer to the base average generally have greater numbers, indicating potential convergence as sample size increases
 
--- Customer Zip Code: Average items ordered and Number of customers for each --
-WITH elligible_cities (customer_state, customer_city) 
+-- Customer Zip Code: Average items ordered and Number of customers for each, removing zipcodes with less than 10 orders
+WITH elligible_zips (customer_state, customer_city, zip_code_prefix) 
 AS (
-	SELECT customer_state, customer_city
-    FROM customers
-    GROUP BY customer_state, customer_city
-    HAVING COUNT(DISTINCT customer_id)>=20)
+	SELECT c.customer_state, c.customer_city, c.zip_code_prefix
+    FROM customers c
+		JOIN orders o ON c.customer_id=o.customer_id  
+		JOIN items i ON o.order_id=i.order_id
+    GROUP BY c.customer_state, c.customer_city, c.zip_code_prefix
+    HAVING COUNT(DISTINCT o.order_id)>=10)
 SELECT DIST.customer_state, DIST.customer_city, DIST.zip_code_prefix, COUNT(DIST.order_id) AS NUM_ORDERS, AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
 FROM (SELECT c.customer_state, c.customer_city, c.zip_code_prefix, o.order_id, COUNT(i.order_item_id) AS NUM_ITEMS
 	  FROM customers c
 		JOIN orders o ON c.customer_id=o.customer_id
         JOIN items i ON o.order_id=i.order_id
-      WHERE (c.customer_state, c.customer_city) IN (SELECT customer_state, customer_city FROM elligible_cities)
+      WHERE (c.customer_state, c.customer_city, c.zip_code_prefix) IN (SELECT * FROM elligible_zips)
 	  GROUP BY c.customer_state, c.customer_city, c.zip_code_prefix, o.order_id) AS DIST
 GROUP BY DIST.customer_state, DIST.customer_city, DIST.zip_code_prefix
 ORDER BY AVG_ITEMS_PER_ORDER DESC
- -- Multiple zip codes in the ranges of 4-7 AIPO; primarily located in SP
- -- Number of orders is so low that this is unikely to extrapolate to a larger order sample
+ -- Multiple zip codes in the ranges of 1.50-2.80 AIPO; primarily located in SP state and Sao Paulo city
+ -- Geographic subdivision so specific that this is unikely to extrapolate to a larger order sample
 
 -- Analysis Part 2: Seller Factors --
 
@@ -324,7 +341,7 @@ FROM (SELECT s.seller_id, o.order_id, s.seller_state, s.seller_city, COUNT(i.ord
 	  GROUP BY s.seller_id, order_id, s.seller_state) AS DIST
 GROUP BY DIST.seller_state, DIST.seller_city
 ORDER BY AVG_ITEMS_PER_ORDER DESC 
- -- Top three cities in terms of AIPO are Fernandopolis (state is SP, AIPO = 2.057), Campina das Missoes (state is RS, AIPO = 1.909) and Portao (state is RS, AIPO = 1.8667)
+ -- Top three cities in terms of AIPO are Fernandopolis (State = SP, AIPO = 2.057), Campina das Missoes (State = RS, AIPO = 1.909) and Portao (State = RS, AIPO = 1.8667)
  -- Most cities have only one seller, but some have high seller, order, and AIPO counts (Sao Jose do Rio Preto, for example) reinforcing the validity of their measurements
  -- Possible correlation between seller_city and AIPO with some locations, but not robust enough in most cases 
 
