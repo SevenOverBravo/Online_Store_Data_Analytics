@@ -26,13 +26,21 @@ IGNORE 1 ROWS;
 -- Items Table --
 CREATE TABLE `olist`.`items` (
   `order_id` VARCHAR(45) NOT NULL,
-  `order_item_id` INT NULL,
+  `order_item_id` INT NOT NULL,
   `product_id` VARCHAR(45) NULL,
   `seller_id` VARCHAR(45) NULL,
   `shipping_limit_date` DATETIME NULL,
   `price` FLOAT NULL,
   `freight_value` FLOAT NULL,
   PRIMARY KEY (`order_id`, `order_item_id`));
+
+-- Load items CSV Into Table --
+LOAD DATA INFILE 'C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/olist_order_items_dataset.csv'
+INTO TABLE items
+FIELDS TERMINATED BY ',' 
+ENCLOSED BY '"'
+LINES TERMINATED BY '\n'
+IGNORE 1 ROWS;
 
 -- Reviews Table -- 
 CREATE TABLE `olist`.`reviews` (
@@ -99,7 +107,7 @@ CREATE TABLE `olist`.`payments` (
   `payment_value` FLOAT NULL,
   PRIMARY KEY (`order_id`, `payment_sequential`));
 
--- Load Sellers CSV Into Table --
+-- Load Payments CSV Into Table --
 LOAD DATA INFILE 'C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/olist_order_payments_dataset.csv'
 INTO TABLE payments
 FIELDS TERMINATED BY ',' 
@@ -116,7 +124,7 @@ CREATE TABLE `olist`.`customers` (
   `zip_code_prefix` VARCHAR(45) NULL,
   PRIMARY KEY (`customer_id`));
 
--- Load Sellers CSV Into Table --
+-- Load Customers CSV Into Table --
 LOAD DATA INFILE 'C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/olist_customers_dataset.csv'
 INTO TABLE customers
 FIELDS TERMINATED BY ',' 
@@ -365,3 +373,91 @@ GROUP BY DIST.seller_state, DIST.seller_city, DIST.zip_code_prefix
 ORDER BY AVG_ITEMS_PER_ORDER DESC 
 -- Majority of top ten zipcodes are located in SP, with many exceeding an averages items per order of two
 -- Most zipcodes only have one seller; likely high colinearlity with the seller_id findings
+
+-- Analysis Part 3: Order Factors --
+
+-- Purchase Date: Day of Week, Month, and Year --
+
+-- First: Query number of orders/items and AIPO over each year of operation
+SELECT ORDER_YEAR, COUNT(DIST.order_id) AS NUM_ORDERS, SUM(NUM_ITEMS) AS TOTAL_ITEMS, AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
+FROM (SELECT YEAR(o.order_purchase_timestamp) AS ORDER_YEAR, o.order_id, COUNT(i.order_item_id) AS NUM_ITEMS
+	  FROM orders o
+		  JOIN items i ON o.order_id = i.order_id
+	  GROUP BY ORDER_YEAR, o.order_id) AS DIST
+GROUP BY ORDER_YEAR
+ -- Increase in number of orders and total items between each year (though may not be consistent trend, as only 2016, 2017, and 2018 purchase dates are included)
+ -- AIPO is close to overall average for each year (2017: AIPO = 1.141, 2018: AIPO = 1.142), with the exception of 2016 (AIPO = 1.186) where only ~300 orders were completed 
+
+ -- Query same metrics as above, but include groupings by month
+SELECT ORDER_YEAR, ORDER_MONTH, COUNT(DIST.order_id) AS NUM_ORDERS, SUM(NUM_ITEMS) AS TOTAL_ITEMS, AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
+FROM (SELECT YEAR(o.order_purchase_timestamp) AS ORDER_YEAR, MONTHNAME(o.order_purchase_timestamp) AS ORDER_MONTH, o.order_id, COUNT(i.order_item_id) AS NUM_ITEMS
+	  FROM orders o
+		  JOIN items i ON o.order_id = i.order_id
+	  GROUP BY ORDER_YEAR, ORDER_MONTH, o.order_id) AS DIST
+GROUP BY ORDER_YEAR, ORDER_MONTH
+ORDER BY AVG_ITEMS_PER_ORDER DESC
+ -- Top three months are September 2016, January 2017, and October 2016; none have significant order/item purchase numbers
+ -- October 2017, November 2017, and May 2018 have thousands of orders each and above-average AIPO (1.165, 1.163, and 1.1564 respectively)
+ -- "Holiday Season" trends may be neglibile, given that December 2017 has below-average AIPO and is outside of the top five months in number of orders and items purchased
+ -- With only three years recorded, it's difficult to make a conclusive judgement about any time-related factors
+
+-- New Query: Shift focus to days of the week
+ELECT DAY_OF_WEEK, COUNT(DIST.order_id) AS NUM_ORDERS, SUM(NUM_ITEMS) AS TOTAL_ITEMS, AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
+FROM (SELECT DAYNAME(o.order_purchase_timestamp) AS DAY_OF_WEEK, o.order_id, COUNT(i.order_item_id) AS NUM_ITEMS
+	  FROM orders o
+		  JOIN items i ON o.order_id = i.order_id
+	  GROUP BY DAY_OF_WEEK, o.order_id) AS DIST
+GROUP BY DAY_OF_WEEK
+ORDER BY CASE
+          WHEN DAY_OF_WEEK = 'Sunday' THEN 1
+          WHEN DAY_OF_WEEK = 'Monday' THEN 2
+          WHEN DAY_OF_WEEK = 'Tuesday' THEN 3
+          WHEN DAY_OF_WEEK = 'Wednesday' THEN 4
+          WHEN DAY_OF_WEEK = 'Thursday' THEN 5
+          WHEN DAY_OF_WEEK = 'Friday' THEN 6
+          WHEN DAY_OF_WEEK = 'Saturday' THEN 7
+     END ASC
+ -- Highest AIPO belongs to Tuesday (1.152), Thursday (1.147), and Monday (1.145)
+ -- Shockingly, the weekend days (Saturday and Sunday) have the lowest AIPO (1.125 and 1.129 respectively) and number of orders/items purchased (several thousand behind the weekdays)
+
+-- Payment Factors --
+
+-- PAYMENT SEQUENTIAL: Number of seperate payment associated with each order and the order count and AIPO of each value (removing orders with sequential values greater than 4)
+WITH elligible_seq (order_id, PAY_COUNT_SEQ) AS (
+	SELECT o.order_id, COUNT(p.payment_sequential) AS PAY_COUNT_SEQ
+    FROM payments p
+		JOIN orders o ON p.order_id=o.order_id  
+    GROUP BY o.order_id
+    HAVING PAY_COUNT_SEQ<=4),
+pay_counts (order_id, PAY_COUNT) AS (
+	SELECT order_id, COUNT(payment_sequential) AS PAY_COUNT
+    FROM payments p
+    GROUP BY order_id),
+item_counts (order_id, NUM_ITEMS) AS (
+	SELECT order_id, COUNT(order_item_id) AS NUM_ITEMS
+    FROM items
+    GROUP BY order_id)
+SELECT p.PAY_COUNT, COUNT(p.order_id) AS NUM_ORDERS, AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
+FROM pay_counts p
+	JOIN item_counts i ON p.order_id=i.order_id
+WHERE p.order_id IN (SELECT order_id FROM elligible_seq)
+GROUP BY p.PAY_COUNT
+ -- Vast majority of orders in the one or two sequential category; less than 500 out of ~100K orders in three and four sequential categories combined
+ -- Only orders in the four sequential category have above-average AIPO (1.179), but this is uncorroborated as only 106 orders are in the category
+
+--PAYMENT INSTALLMENTS: Number of payment installments associated with each 
+WITH pay_counts (order_id, PAY_COUNT, NUM_INSTALLMENTS) AS (
+    SELECT order_id, COUNT(payment_sequential) AS PAY_COUNT, SUM(payment_installments) AS NUM_INSTALLMENTS
+    FROM payments
+    GROUP BY order_id),
+item_counts (order_id, NUM_ITEMS) AS (
+    SELECT order_id, COUNT(order_item_id) AS NUM_ITEMS
+    FROM items
+    GROUP BY order_id)
+SELECT p.NUM_INSTALLMENTS, COUNT(p.order_id) AS NUM_ORDERS, AVG(i.NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
+FROM pay_counts p
+	JOIN item_counts i ON p.order_id = i.order_id
+WHERE p.NUM_INSTALLMENTS BETWEEN 1 AND 10
+GROUP BY p.NUM_INSTALLMENTS
+ORDER BY AVG_ITEMS_PER_ORDER DESC
+
