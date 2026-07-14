@@ -330,7 +330,7 @@ WITH elligible_sellers (seller_id) AS (
         JOIN sellers s ON i.seller_id=s.seller_id
 	GROUP BY s.seller_id
     HAVING COUNT(DISTINCT o.order_id)>=10) 
-SELECT AVG(NUM_ITEMS) AS AVG_ITEMS_PER_CUSTOMER
+SELECT AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
 FROM (SELECT s.seller_id, o.order_id, COUNT(i.order_item_id) AS NUM_ITEMS
 	  FROM items i
 		  JOIN orders o ON i.order_id=o.order_id
@@ -347,7 +347,7 @@ WITH elligible_sellers (seller_id) AS (
         JOIN sellers s ON i.seller_id=s.seller_id
 	GROUP BY s.seller_id
     HAVING COUNT(DISTINCT o.order_id)>=10) 
-SELECT DIST.seller_id, COUNT(DISTINCT DIST.order_id) AS NUM_ORDERS, AVG(NUM_ITEMS) AS AVG_ITEMS_PER_CUSTOMER
+SELECT DIST.seller_id, COUNT(DISTINCT DIST.order_id) AS NUM_ORDERS, AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
 FROM (SELECT s.seller_id, o.order_id, COUNT(i.order_item_id) AS NUM_ITEMS
 	  FROM items i
 		  JOIN orders o ON i.order_id=o.order_id
@@ -355,7 +355,7 @@ FROM (SELECT s.seller_id, o.order_id, COUNT(i.order_item_id) AS NUM_ITEMS
 	  WHERE s.seller_id IN (SELECT seller_id FROM elligible_sellers)
 	  GROUP BY s.seller_id, order_id) AS DIST
 GROUP BY DIST.seller_id
-ORDER BY AVG_ITEMS_PER_CUSTOMER DESC
+ORDER BY AVG_ITEMS_PER_ORDER DESC
 -- Top three sellers in terms of AIPO are those with IDs beginning in eed78 (2.546), 334ca (2.367), and e7d5b (2.250)
 -- Many sellers with >100 orders also have high AIPOs, like 25c5c (158 orders, AIPO = 1.703) and 1025f (915 orders, AIPO = 1.561)
 -- High order number and AIPO signals accurate long-term averages and opportunities to improve overall AIPO
@@ -453,7 +453,7 @@ ORDER BY AVG_ITEMS_PER_ORDER DESC
  -- With only three years recorded, it's difficult to make a conclusive judgement about any time-related factors
 
 -- New Query: Shift focus to days of the week
-ELECT DAY_OF_WEEK, COUNT(DIST.order_id) AS NUM_ORDERS, SUM(NUM_ITEMS) AS TOTAL_ITEMS, AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
+SELECT DAY_OF_WEEK, COUNT(DIST.order_id) AS NUM_ORDERS, SUM(NUM_ITEMS) AS TOTAL_ITEMS, AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
 FROM (SELECT DAYNAME(o.order_purchase_timestamp) AS DAY_OF_WEEK, o.order_id, COUNT(i.order_item_id) AS NUM_ITEMS
 	  FROM orders o
 		  JOIN items i ON o.order_id = i.order_id
@@ -737,8 +737,9 @@ WITH desc_info (order_id, DESC_LENGTH) AS (
         WHEN p.product_description_length<=50 THEN "Very Short"
         WHEN p.product_description_length<=100 THEN "Short"
         WHEN p.product_description_length<=200 THEN "Moderate Short"
-        WHEN p.product_description_length<=500 THEN "Moderate Long"
-        WHEN p.product_description_length<=1000 THEN "Long"
+        WHEN p.product_description_length<=500 THEN "Moderate"
+        WHEN p.product_description_length<=1000 THEN "Moderate Long"
+		WHEN p.product_description_length<=2000 THEN "Long"
 		WHEN p.product_description_length>2000 THEN "Very Long"
         ELSE NULL
         END AS DESC_LENGTH
@@ -755,5 +756,5 @@ WHERE d.DESC_LENGTH IS NOT NULL
 GROUP BY d.DESC_LENGTH
 ORDER BY AVG_ITEMS_PER_ORDER DESC
  -- Top three categories are Very Short (AIPO = 1.212), Short (AIPO = 1.206), and Moderate Short (1.187)
- -- The shorter the description, the more items are purchased in and order (Very Short has the best AIPO, Very Long has the worst, and all other categories are arranged in ascending length)
+ -- The shorter the description, the more items are purchased in and order (with the excpeption of the Very Long category, which has a higher AIPO than the Long category)
  -- Trend may not be perfect as Very Short and Short categories have low order counts 
