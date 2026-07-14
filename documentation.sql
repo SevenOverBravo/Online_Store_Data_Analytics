@@ -149,7 +149,7 @@ ENCLOSED BY '"'
 LINES TERMINATED BY '\n'
 IGNORE 1 ROWS;
 
--- Analysis Pt. 1: Customer Factors (Location) --
+-- Analysis Pt. 1: Customer Factors: State, City, Zip Code--
 
 -- BASELINE INFO --
 
@@ -162,10 +162,9 @@ ORDER BY NUM_CUSTOMERS DESC
   
 -- Average # of items purchased per order --
 SELECT AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
-FROM (SELECT o.order_id, COUNT(i.order_item_id) AS NUM_ITEMS
-	  FROM orders o JOIN items i 
-	    ON o.order_id = i.order_id
-	  GROUP BY o.order_id) AS DIST
+FROM (SELECT order_id, COUNT(order_item_id) AS NUM_ITEMS
+	  FROM items i 
+	  GROUP BY i.order_id) AS DIST
     -- Returns 1.142, but neglects any possible outliers in cities with low customer counts
 
 -- Recalculate Average with Caveat: Remove orders associated with customers from cities with less than 20 orders overall
@@ -193,7 +192,24 @@ WHERE (zip_code_prefix IS NOT NULL AND zip_code_prefix REGEXP '^[0-9]{4,5}$') --
   AND (customer_state IS NOT NULL AND customer_state REGEXP '^[A-Z]{2}$'); -- Not Null and a sequence of 2 letters
   -- Output shows no row is invalid (Counts = Number of Rows)
 
--- Customer State: Average items ordered and Number of customers for each, removing states with less than 300 orders
+-- CUSTOMER STATE: Calculate average items per order (AIPO) when states with less thqan 300 orders (outlier baseline) are removed
+WITH elligible_states (customer_state) AS (
+	SELECT c.customer_state
+    FROM customers c
+		JOIN orders o ON c.customer_id=o.customer_id  
+		JOIN items i ON o.order_id=i.order_id
+    GROUP BY c.customer_state
+    HAVING COUNT(DISTINCT o.order_id)>=300)
+SELECT AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
+FROM (SELECT o.order_id, COUNT(i.order_item_id) AS NUM_ITEMS
+	  FROM customers c
+		JOIN orders o ON c.customer_id=o.customer_id
+        JOIN items i ON o.order_id=i.order_id
+      WHERE c.customer_state IN (SELECT * FROM elligible_states)
+	  GROUP BY c.customer_state, o.order_id) AS DIST
+	 -- Returns 1.142; no significant change from unfiltered baseline
+
+-- AIPO and number of customers for each, removing states with less than 300 orders
 WITH elligible_states (customer_state) AS (
 	SELECT c.customer_state
     FROM customers c
@@ -210,10 +226,28 @@ FROM (SELECT c.customer_state, c.customer_city, o.order_id, COUNT(i.order_item_i
 	  GROUP BY c.customer_state, o.order_id) AS DIST
 GROUP BY DIST.customer_state
 ORDER BY AVG_ITEMS_PER_ORDER DESC
-  -- Output: Top 3 states in terms of average items per order (AIPO) are MT (1.168), GO (1.162), and SC (1.156); not much different from overall average of 1.144
+  -- Output: Top 3 states in terms of AIPO are MT (1.168), GO (1.162), and SC (1.156); not much different from overall average of 1.144
   -- States with the highest number of orders (SP, RJ, and MG) coalesce around the overall AIPO 
   
--- Customer City: Average items ordered and Number of customers for each, removing cities with less than 20 orders
+-- CUSTOMER CITY: Calculate average items per order (AIPO) when cities with less than 100 orders (outlier baseline) are removed
+WITH elligible_cities (customer_state, customer_city) AS (
+	SELECT c.customer_state, c.customer_city
+	FROM customers c
+		JOIN orders o ON c.customer_id=o.customer_id  
+		JOIN items i ON o.order_id=i.order_id
+	GROUP BY c.customer_state, c.customer_city
+    HAVING COUNT(DISTINCT o.order_id)>=100)
+SELECT AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
+FROM (SELECT o.order_id, COUNT(i.order_item_id) AS NUM_ITEMS
+	  FROM customers c
+		JOIN orders o ON c.customer_id=o.customer_id
+        JOIN items i ON o.order_id=i.order_id
+      WHERE (c.customer_state, c.customer_city) IN (SELECT * FROM elligible_cities)
+	  GROUP BY o.order_id) AS DIST
+ORDER BY AVG_ITEMS_PER_ORDER DESC
+	-- Returns 1.143
+	
+-- Average items ordered and Number of customers for each, removing cities with less than 100 orders
 WITH elligible_cities (customer_state, customer_city) AS (
 	SELECT c.customer_state, c.customer_city
     FROM customers c
@@ -234,7 +268,25 @@ ORDER BY AVG_ITEMS_PER_ORDER DESC
  -- In the Top 20 cities, six are in SP, three in SC and MG, two in RS and RJ, and one in MT, GO, PR, and BA
  -- Many of the top AIPO cities have order counts just above 100; cities closer to the base average generally have greater numbers, indicating potential convergence as sample size increases
 
--- Customer Zip Code: Average items ordered and Number of customers for each, removing zipcodes with less than 10 orders
+-- CUSTOMER ZIP CODE: Calculate average items per order (AIPO) when zip codes with less than 10 orders (outlier baseline) are removed
+WITH elligible_zips (customer_state, customer_city, zip_code_prefix) 
+AS (
+	SELECT c.customer_state, c.customer_city, c.zip_code_prefix
+    FROM customers c
+		JOIN orders o ON c.customer_id=o.customer_id  
+		JOIN items i ON o.order_id=i.order_id
+    GROUP BY c.customer_state, c.customer_city, c.zip_code_prefix
+    HAVING COUNT(DISTINCT o.order_id)>=10)
+SELECT AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
+FROM (SELECT o.order_id, COUNT(i.order_item_id) AS NUM_ITEMS
+	  FROM customers c
+		JOIN orders o ON c.customer_id=o.customer_id
+        JOIN items i ON o.order_id=i.order_id
+      WHERE (c.customer_state, c.customer_city, c.zip_code_prefix) IN (SELECT * FROM elligible_zips)
+	  GROUP BY o.order_id) AS DIST
+	-- Returns 1.146
+
+-- AIPO and Number of customers for each, removing zipcodes with less than 10 orders
 WITH elligible_zips (customer_state, customer_city, zip_code_prefix) 
 AS (
 	SELECT c.customer_state, c.customer_city, c.zip_code_prefix
@@ -308,9 +360,8 @@ ORDER BY AVG_ITEMS_PER_CUSTOMER DESC
 -- Many sellers with >100 orders also have high AIPOs, like 25c5c (158 orders, AIPO = 1.703) and 1025f (915 orders, AIPO = 1.561)
 -- High order number and AIPO signals accurate long-term averages and opportunities to improve overall AIPO
 
--- Seller Location --
+-- Seller Location: State, City, Zip Code --
 
--- Seller State --
 -- AIPO per seller_state and number of sellers/orders from each, keeping the same filter as above
 WITH elligible_sellers (seller_id) AS (
 	SELECT s.seller_id
@@ -422,7 +473,23 @@ ORDER BY CASE
 
 -- Payment Factors --
 
--- PAYMENT SEQUENTIAL: Number of seperate payment associated with each order and the order count and AIPO of each value (removing orders with sequential values greater than 4)
+-- PAYMENT SEQUENTIAL: Calculate baseline AIPO, removing orders with sequential values greater than four (outlier baseline)
+WITH elligible_seq (order_id, PAY_COUNT_SEQ) AS (
+	SELECT o.order_id, COUNT(p.payment_sequential) AS PAY_COUNT_SEQ
+    FROM payments p
+		JOIN orders o ON p.order_id=o.order_id  
+    GROUP BY o.order_id
+    HAVING PAY_COUNT_SEQ<=4),
+item_counts (order_id, NUM_ITEMS) AS (
+	SELECT order_id, COUNT(order_item_id) AS NUM_ITEMS
+    FROM items
+    GROUP BY order_id)
+SELECT AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
+FROM item_counts
+WHERE order_id IN (SELECT order_id FROM elligible_seq)
+	--Returns 1.142; no significantly different from unfiltered AIPO
+	
+-- Number of payment sequentials associated with each order and the order count and AIPO of each value (removing orders with sequential values greater than four)
 WITH elligible_seq (order_id, PAY_COUNT_SEQ) AS (
 	SELECT o.order_id, COUNT(p.payment_sequential) AS PAY_COUNT_SEQ
     FROM payments p
@@ -445,7 +512,7 @@ GROUP BY p.PAY_COUNT
  -- Vast majority of orders in the one or two sequential category; less than 500 out of ~100K orders in three and four sequential categories combined
  -- Only orders in the four sequential category have above-average AIPO (1.179), but this is uncorroborated as only 106 orders are in the category
 
---PAYMENT INSTALLMENTS: Number of payment installments associated with each 
+--PAYMENT INSTALLMENTS: Calculate baseline AIPO, removing orders with installment quantities greater than 10 (outlier baseline)
 WITH pay_counts (order_id, PAY_COUNT, NUM_INSTALLMENTS) AS (
     SELECT order_id, COUNT(payment_sequential) AS PAY_COUNT, SUM(payment_installments) AS NUM_INSTALLMENTS
     FROM payments
@@ -454,10 +521,239 @@ item_counts (order_id, NUM_ITEMS) AS (
     SELECT order_id, COUNT(order_item_id) AS NUM_ITEMS
     FROM items
     GROUP BY order_id)
-SELECT p.NUM_INSTALLMENTS, COUNT(p.order_id) AS NUM_ORDERS, AVG(i.NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
+SELECT AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
+FROM pay_counts p
+	JOIN item_counts i ON p.order_id = i.order_id
+WHERE p.NUM_INSTALLMENTS BETWEEN 1 AND 10
+	-- Returns 1.141
+
+-- Number of payment installments associated with each order and the order count and AIPO of each quantity (removing orders with installments quantities greater than 10)
+WITH pay_counts (order_id, PAY_COUNT, NUM_INSTALLMENTS) AS (
+    SELECT order_id, COUNT(payment_sequential) AS PAY_COUNT, SUM(payment_installments) AS NUM_INSTALLMENTS
+    FROM payments
+    GROUP BY order_id),
+item_counts (order_id, NUM_ITEMS) AS (
+    SELECT order_id, COUNT(order_item_id) AS NUM_ITEMS
+    FROM items
+    GROUP BY order_id)
+SELECT p.NUM_INSTALLMENTS, COUNT(p.order_id) AS NUM_ORDERS, AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
 FROM pay_counts p
 	JOIN item_counts i ON p.order_id = i.order_id
 WHERE p.NUM_INSTALLMENTS BETWEEN 1 AND 10
 GROUP BY p.NUM_INSTALLMENTS
 ORDER BY AVG_ITEMS_PER_ORDER DESC
+-- Top three amounts of payment installments in terms of AIPO are ten (1.298), eight (1.188), and six (1.180)
+-- Generally, most installments = higher AIPO; likely because more installments usually means more money is paid for an order, and thus more items are purchased
+-- More orders are paid in one installment than any other count, but each quantity of installments up to ten has thousands of orders within each of them
 
+-- PAYMENT METHOD: Calculate baseline AIPO, removing orders "not_defined" payment methods
+WITH elligible_orders (order_id, payment_type) AS (
+	SELECT o.order_id, p.payment_type
+    FROM payments p 
+		JOIN orders o ON p.order_id=o.order_id
+    WHERE p.payment_type!="not_defined"),
+item_info (order_id, NUM_ITEMS) AS (
+	SELECT order_id, COUNT(order_item_id) AS NUM_ITEMS
+    FROM items
+    GROUP BY order_id)
+SELECT AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
+FROM item_info
+WHERE order_id IN (SELECT order_id FROM elligible_orders)
+	-- Returns 1.142
+	
+-- Different payment methods associated with each order (some have multiple) and the order count and AIPO of each method (removing order sequentials with "not_defined" payment methods)
+WITH elligible_orders (order_id, payment_type) AS (
+	SELECT o.order_id, p.payment_type
+    FROM payments p 
+		JOIN orders o ON p.order_id=o.order_id
+    WHERE p.payment_type!="not_defined"),
+pay_info (order_id, PAY_TYPES) AS (
+	SELECT order_id, GROUP_CONCAT(DISTINCT payment_type) AS PAY_TYPES
+    FROM elligible_orders
+    GROUP BY order_id),
+item_info (order_id, NUM_ITEMS) AS (
+	SELECT order_id, COUNT(order_item_id) AS NUM_ITEMS
+    FROM items
+    GROUP BY order_id)
+SELECT p.PAY_TYPES, COUNT(p.order_id) AS NUM_ORDERS, AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
+FROM pay_info p 
+	JOIN item_info i ON p.order_id=i.order_id
+GROUP BY p.PAY_TYPES
+ORDER BY AVG_ITEMS_PER_ORDER DESC
+ -- Six different combinations of payment methods (Boleto, Credit Card, Debit Card, Voucher, Credit Card & Voucher, Credit Card & Debit Card)
+ -- Credit Card only is by far the most common method, with Boleto being second
+ -- Only Boleto has above-average AIPO (1.166)
+
+-- Analysis Part 4: Product Factors --
+
+-- PRODUCT ATTRIBUTES: Category, Weight, Volume --
+
+-- Catgeory: Calculate baseline AIPO, removing categories with less than 300 orders that include them
+WITH elligible_categories (PRODUCT_CATEGORY) AS (
+    SELECT p.product_category_name AS PRODUCT_CATEGORY
+    FROM products p
+		JOIN items i ON i.product_id = p.product_id
+    GROUP BY PRODUCT_CATEGORY
+    HAVING COUNT(DISTINCT i.order_id) >= 300),
+elligible_orders (order_id) AS (
+    SELECT DISTINCT i.order_id
+    FROM items i
+		JOIN products p ON p.product_id = i.product_id
+		JOIN elligible_categories e ON e.PRODUCT_CATEGORY = p.product_category_name),
+item_info (order_id, NUM_ITEMS) AS (
+    SELECT order_id, COUNT(order_item_id) AS NUM_ITEMS
+    FROM items
+    GROUP BY order_id)
+SELECT AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
+FROM item_info
+WHERE order_id IN (SELECT order_id FROM elligible_orders)
+	-- Returns 1.142
+	
+-- Product categories and their respective order counts and AIPO, removing those with less than 300 orders associated with them
+WITH product_info (PRODUCT_CATEGORY, order_id) AS (
+	SELECT DISTINCT p.product_category_name AS PRODUCT_CATEGORY, i.order_id
+    FROM products p 
+		JOIN items i ON i.product_id=p.product_id),
+order_item_info (order_id, NUM_ITEMS) AS (
+	SELECT order_id, COUNT(order_item_id) AS NUM_ITEMS
+    FROM items i
+    GROUP BY order_id)
+SELECT p.PRODUCT_CATEGORY, COUNT(o.order_id) AS NUM_ORDERS, AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
+FROM product_info p
+	JOIN order_item_info o ON p.order_id=o.order_id
+GROUP BY p.PRODUCT_CATEGORY
+HAVING NUM_ORDERS>=300
+ORDER BY AVG_ITEMS_PER_ORDER DESC 
+ -- Top three product categories are Office Furniture (AIPO = 1.348), Furniture Decor (AIPO = 1.333), and Home Construction (AIPO = 1.312)
+ -- Top two categories are both furniture related, have ~7500 combined orders (large sample-size for validity) and above-average AIPO by a decent margin
+ -- Construction related categories also strong candidates for marketing focus for same reasons as furniture
+
+-- Weight: AIPO of each order that includes at least one item from a designated weight class and the order count of each weight class
+WITH weight_info (order_id, PRODUCT_WEIGHT_CLASS) AS (
+	SELECT DISTINCT i.order_id,
+		CASE
+        WHEN (p.product_weight_g)/1000>0 AND (p.product_weight_g)/1000<=1 THEN "Very Light"
+		WHEN (p.product_weight_g)/1000>1 AND (p.product_weight_g)/1000<=5 THEN "Light"
+		WHEN (p.product_weight_g)/1000>5 AND (p.product_weight_g)/1000<=10 THEN "Moderate-Light"
+		WHEN (p.product_weight_g)/1000>10 AND (p.product_weight_g)/1000<=15 THEN "Moderate"
+		WHEN (p.product_weight_g)/1000>15 AND (p.product_weight_g)/1000<=20 THEN "Moderate-Heavy"
+		WHEN (p.product_weight_g)/1000>20 AND (p.product_weight_g)/1000<=25 THEN "Heavy"
+		WHEN (p.product_weight_g)/1000>25 THEN "Very Heavy"
+		ELSE NULL
+		END AS PRODUCT_WEIGHT_CLASS
+    FROM products p
+		JOIN items i ON i.product_id=p.product_id), 
+item_info (order_id, NUM_ITEMS) AS (
+	SELECT order_id, COUNT(order_item_id) AS NUM_ITEMS
+    FROM items
+    GROUP BY order_id)
+SELECT w.PRODUCT_WEIGHT_CLASS, COUNT(i.order_id) AS NUM_ORDERS, AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
+FROM weight_info w
+	JOIN item_info i ON w.order_id=i.order_id
+WHERE w.PRODUCT_WEIGHT_CLASS IS NOT NULL
+GROUP BY w.PRODUCT_WEIGHT_CLASS
+ORDER BY AVG_ITEMS_PER_ORDER DESC 
+ -- Top three weight classifications are Moderate (AIPO = 1.207), Moderate-Heavy (AIPO = 1.1672), and Light (AIPO = 1.1605)
+ -- Majority of orders are in the Light or Very Light categories, while the highest AIPOs are focussed near the middle of each weight classification
+ -- Heaviest categories (Heavy, Very Heavy) are last place in terms of order count and AIPO 
+
+-- Volume: AIPO of each order that includes at least one item from a designated volume class and the order count of each volume class
+-- Note: Volume will be approxiated as (length x width x height)
+WITH volume_info (order_id, PRODUCT_VOLUME_CLASS) AS (
+	SELECT DISTINCT i.order_id, 
+		CASE
+		WHEN (p.product_height_cm * p.product_length_cm * p.product_width_cm)<=1000 THEN "Very Small"
+        WHEN (p.product_height_cm * p.product_length_cm * p.product_width_cm)<=5000 THEN "Small"
+        WHEN (p.product_height_cm * p.product_length_cm * p.product_width_cm)<=25000 THEN "Moderate"
+        WHEN (p.product_height_cm * p.product_length_cm * p.product_width_cm)<=62500 THEN "Large"
+        WHEN (p.product_height_cm * p.product_length_cm * p.product_width_cm)>62500 THEN "Very Large"
+        END AS PRODUCT_VOLUME_CLASS
+    FROM products p
+		JOIN items i ON i.product_id=p.product_id), 
+item_info (order_id, NUM_ITEMS) AS (
+	SELECT order_id, COUNT(order_item_id) AS NUM_ITEMS
+    FROM items
+    GROUP BY order_id)
+SELECT v.PRODUCT_VOLUME_CLASS, COUNT(i.order_id) AS NUM_ORDERS, AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
+FROM volume_info v
+	JOIN item_info i ON v.order_id=i.order_id
+GROUP BY v.PRODUCT_VOLUME_CLASS
+ORDER BY AVG_ITEMS_PER_ORDER DESC
+ -- Top three volume categories are Very Large (AIPO = 1.1918), Moderate (AIPO = 1.1689), and Large (AIPO = 1.1522)
+ -- With the exception of the Moderate category (2nd place over Large), the larger the product's volume category is, the greater AIPO of the orders that include it
+
+-- PRODUCT PRESENTATION: Name Length, Number of Photos, Description Length
+
+-- NAME LENGTH: AIPO of each product name length category (orders can be counted mutliple times if they contains items of multiple name length catgeories) 
+WITH name_info (order_id, NAME_LENGTH) AS (
+	SELECT DISTINCT i.order_id,
+		CASE
+        WHEN p.product_name_length<=20 THEN "Very Short"
+        WHEN p.product_name_length<=30 THEN "Short"
+        WHEN p.product_name_length<=40 THEN "Moderate Short"
+        WHEN p.product_name_length<=50 THEN "Moderate Long"
+        WHEN p.product_name_length<=60 THEN "Long"
+		WHEN p.product_name_length>60 THEN "Very Long"
+        ELSE NULL
+        END AS NAME_LENGTH
+    FROM products p
+		JOIN items i ON i.product_id=p.product_id),
+item_info (order_id, NUM_ITEMS) AS (
+	SELECT order_id, COUNT(order_item_id) AS NUM_ITEMS
+    FROM items
+    GROUP BY order_id)
+SELECT n.NAME_LENGTH, COUNT(i.order_id) AS NUM_ORDERS, AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
+FROM name_info n
+	JOIN item_info i ON i.order_id=n.order_id
+WHERE n.NAME_LENGTH IS NOT NULL
+GROUP BY n.NAME_LENGTH 
+ORDER BY AVG_ITEMS_PER_ORDER DESC
+ -- Top three name length classes are Short (AIPO = 1.218), Very Short (AIPO = 1.203) and Very Long (1.183)
+ -- Most orders condensed around the middle categories (Moderate Light to Long), only ~7000 combined order in the top three mentioned above
+
+-- NUMBER OF PHOTOS: AIPO of each given the number of photos an item that belongs to an order has on the Olist website (orders can be counted mutliple times if they contains items with different photo quantities)
+-- Items with more than 10 pictures are removed (outlier baseline)
+WITH photo_info (PHOTO_NUM, order_id) AS (
+	SELECT DISTINCT p.product_photos_qty AS PHOTO_NUM, i.order_id
+    FROM products p 
+		JOIN items i ON i.product_id=p.product_id
+	WHERE p.product_photos_qty<=10),
+item_info (order_id, NUM_ITEMS) AS (
+	SELECT order_id, COUNT(order_item_id) AS NUM_ITEMS
+    FROM items
+    GROUP BY order_id)
+SELECT PHOTO_NUM, COUNT(i.order_id) AS NUM_ORDERS, AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
+FROM photo_info p 
+	JOIN item_info i ON i.order_id=p.order_id
+GROUP BY PHOTO_NUM
+ORDER BY AVG_ITEMS_PER_ORDER DESC
+ -- Top three photo quantities are one (AIPO = 1.176), two (AIPO = 1.168), and four (AIPO = 1.138); not significant increase over baseline average
+ -- Generally, more photos means lower AIPO (four out of five photo quantities above five are in the bottom five of AIPO)
+
+-- DESCRIPTION LENGTH: AIPO of each product description length category (orders can be counted mutliple times if they contains items of multiple description length catgeories)
+WITH desc_info (order_id, DESC_LENGTH) AS (
+	SELECT DISTINCT i.order_id,
+		CASE
+        WHEN p.product_description_length<=50 THEN "Very Short"
+        WHEN p.product_description_length<=100 THEN "Short"
+        WHEN p.product_description_length<=200 THEN "Moderate Short"
+        WHEN p.product_description_length<=500 THEN "Moderate Long"
+        WHEN p.product_description_length<=1000 THEN "Long"
+		WHEN p.product_description_length>2000 THEN "Very Long"
+        ELSE NULL
+        END AS DESC_LENGTH
+    FROM products p
+		JOIN items i ON i.product_id=p.product_id),
+item_info (order_id, NUM_ITEMS) AS (
+	SELECT order_id, COUNT(order_item_id) AS NUM_ITEMS
+    FROM items
+    GROUP BY order_id)
+SELECT d.DESC_LENGTH, COUNT(i.order_id) AS NUM_ORDERS, AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
+FROM desc_info d
+	JOIN item_info i ON i.order_id=d.order_id
+WHERE d.DESC_LENGTH IS NOT NULL
+GROUP BY d.DESC_LENGTH
+ORDER BY AVG_ITEMS_PER_ORDER DESC
+ -- Top three categories are Very Short (AIPO = 1.212), Short (AIPO = 1.206), and Moderate Short (1.187)
+ -- The shorter the description, the more items are purchased in and order (Very Short has the best AIPO, Very Long has the worst, and all other categories are arranged in ascending length)
+ -- Trend may not be perfect as Very Short and Short categories have low order counts 
