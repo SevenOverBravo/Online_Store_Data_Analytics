@@ -792,4 +792,37 @@ FROM (SELECT COUNT(DISTINCT order_id) AS NUM_ORDERS_2017
  -- Returns order number growth of 19.76% percent between 2017 and 2018
  -- Order count of 54011 for 2018 means that 2019 is estimated to have 64681 total orders 
 
+-- ANNUAL ORDER GROWTH: Use two most recent years as reference (2017 and 2018)
+-- Will be assumed to be accurate estimate for order growth between 2018 and 2019
+SELECT NUM_ORDERS_2017, NUM_ORDERS_2018, (((NUM_ORDERS_2018 / NUM_ORDERS_2017) - 1) * 100) AS PERCENT_CHANGE
+FROM (SELECT COUNT(DISTINCT order_id) AS NUM_ORDERS_2017
+	 FROM orders
+	 WHERE YEAR(order_purchase_timestamp)=2017) AS ORDERS_2017,
+	 (SELECT COUNT(DISTINCT order_id) AS NUM_ORDERS_2018
+	 FROM orders
+	 WHERE YEAR(order_purchase_timestamp)=2018) AS ORDERS_2018
+ -- Returns order number growth of 19.76% percent between 2017 and 2018
+ -- Order count of 54011 for 2018 means that 2019 is estimated to have 64681 total orders 
+ -- Hence, our baseline revenue for 2019 is Number of Orders * AIPO (assuming base AIPO is unchanged from 2018) * Median Price per order
+ -- 2019 base revenue = 64681 * 1.142 * 74.99 = 5,534,338.56 Braziian Real (or $1,384,797.25 given an exchange rate of 0.25 USD = 1 BR)
+
+-- MAIN IDEA: Given that product categories relating to furniture have high order counts and much higher AIPO than other product categories, this subsequent investigation will focus on them in product promotion as a way to increase revenues
+-- First, look at order numbers as AIPO for each product category in 2018
+SELECT COUNT(DIST.order_id) AS FURNITURE_ORDERS_2018, AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
+FROM (SELECT i.order_id, COUNT(i.order_item_id) AS NUM_ITEMS
+	  FROM items i
+		  JOIN products p ON p.product_id = i.product_id
+		  JOIN orders o ON o.order_id = i.order_id
+	  WHERE p.product_category_name IN ('office_furniture', 'furniture_decor', 'furniture_living_room')
+	  	  AND YEAR(o.order_purchase_timestamp) = 2018
+	  GROUP BY i.order_id) AS DIST
+ -- Returns 2018 furniture order count of 4048 and AIPO of 1.295
+
+-- To create a scenario outlining the potential revenue that comes from increasing promotional and visibility effort of Olist's furniture, the 2019 order counts for furniture related products will be increased by 50% more than the average for all products
+-- So, instead of these products having 19.76% more orders in 2019 than 2018, they'll have 19.76 * 1.50 = 29.64% more orders
+-- 2019 furniture order count = 5247
+
+--New Query: Total order count of 2019 under the furniture promotion plan
+
+
 
