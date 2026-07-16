@@ -758,3 +758,38 @@ ORDER BY AVG_ITEMS_PER_ORDER DESC
  -- Top three categories are Very Short (AIPO = 1.212), Short (AIPO = 1.206), and Moderate Short (1.187)
  -- The shorter the description, the more items are purchased in and order (with the excpeption of the Very Long category, which has a higher AIPO than the Long category)
  -- Trend may not be perfect as Very Short and Short categories have low order counts 
+
+
+-- POTENTIAL TAKEAWAYS AND BUSINESS OPPORTUNITIES -- 
+
+-- FIRST: Find average price per item
+
+-- MEAN PRICE PER ITEM
+SELECT AVG(price) AS AVG_PRICE, STDDEV(price) AS STDDEV_PRICE
+FROM items
+ -- Return 120.67 for mean price per item and 183.63 for standard deviation of price
+ -- High standard deviation hints at large outliers; demonstrated with many items exceeding 5000 in price
+
+-- MEDIAN PRICE PER ITEM
+SELECT AVG(middle.price) AS MEDIAN
+FROM (SELECT price 
+	  FROM items
+	  WHERE price IS NOT NULL
+	  ORDER BY price DESC
+      LIMIT 56324, 2) AS middle
+ -- Returns 74.99 as median price per item; large outliers further confirmed due to median being smaller than mean
+ -- Median will thus be used for future analysis as the average price per item
+
+-- ANNUAL ORDER GROWTH: Use two most recent years as reference (2017 and 2018)
+-- Will be assumed to be accurate estimate for order growth between 2018 and 2019
+SELECT NUM_ORDERS_2017, NUM_ORDERS_2018, (((NUM_ORDERS_2018 / NUM_ORDERS_2017) - 1) * 100) AS PERCENT_CHANGE
+FROM (SELECT COUNT(DISTINCT order_id) AS NUM_ORDERS_2017
+	 FROM orders
+	 WHERE YEAR(order_purchase_timestamp)=2017) AS ORDERS_2017,
+	 (SELECT COUNT(DISTINCT order_id) AS NUM_ORDERS_2018
+	 FROM orders
+	 WHERE YEAR(order_purchase_timestamp)=2018) AS ORDERS_2018
+ -- Returns order number growth of 19.76% percent between 2017 and 2018
+ -- Order count of 54011 for 2018 means that 2019 is estimated to have 64681 total orders 
+
+
