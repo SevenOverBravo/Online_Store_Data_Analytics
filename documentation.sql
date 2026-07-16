@@ -820,9 +820,35 @@ FROM (SELECT i.order_id, COUNT(i.order_item_id) AS NUM_ITEMS
 
 -- To create a scenario outlining the potential revenue that comes from increasing promotional and visibility effort of Olist's furniture, the 2019 order counts for furniture related products will be increased by 50% more than the average for all products
 -- So, instead of these products having 19.76% more orders in 2019 than 2018, they'll have 19.76 * 1.50 = 29.64% more orders
--- 2019 furniture order count = 5247
+-- 2019 furniture order count = 4048 * 1.2964 = 5247
 
 --New Query: Total order count of 2019 under the furniture promotion plan
+SELECT (54011 - 4048) * 1.1976 + 5247
+ -- Return 65083
+
+-- AIPO IN 2019: First, query AIPO of non-furniture related orders in 2018
+WITH product_info (PRODUCT_CATEGORY, order_id) AS (
+	SELECT DISTINCT p.product_category_name AS PRODUCT_CATEGORY, i.order_id
+    FROM products p 
+		JOIN items i ON i.product_id=p.product_id
+	WHERE p.product_category_name NOT IN ('office_furniture', 'furniture_decor', 'furniture_living_room')),
+order_item_info (order_id, NUM_ITEMS) AS (
+	SELECT i.order_id, COUNT(i.order_item_id) AS NUM_ITEMS
+    FROM items i
+		JOIN orders o ON i.order_id=o.order_id
+	WHERE YEAR(o.order_purchase_timestamp)=2018
+    GROUP BY i.order_id)
+SELECT AVG(NUM_ITEMS) AS AVG_ITEMS_PER_ORDER
+FROM product_info p
+	JOIN order_item_info o ON p.order_id=o.order_id
+	-- Returns 1.138
+
+-- Calculate 2019 AIPO using 2018 furniture and non-furniture order counts and AIPOs, as well as respective order growth factors
+-- Note: It is assumed that the AIPO of any non-furniture orders remains consistent between years
+SELECT ((1.138 * (54011 - 4048) * 1.1976)/65083) + ((1.295 * 5247)/65083)
+ -- Returns 2019 AIPO of 1.151
+
+-- MEDIAN PRICE PER ITEM IN 2019: 
 
 
 
