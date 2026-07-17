@@ -848,7 +848,30 @@ FROM product_info p
 SELECT ((1.138 * (54011 - 4048) * 1.1976)/65083) + ((1.295 * 5247)/65083)
  -- Returns 2019 AIPO of 1.151
 
--- MEDIAN PRICE PER ITEM IN 2019: 
+-- MEDIAN PRICE PER ITEM IN 2019: Calculate weighted median price per item in 2019
+WITH order_class AS (
+    SELECT o.order_id,
+           SUM(i.price) AS ORDER_PRICE,
+           CASE WHEN EXISTS (
+               SELECT 1 FROM items i
+               JOIN products p ON p.product_id = i.product_id
+               WHERE i.order_id = o.order_id
+                 AND p.product_category_name IN ('office_furniture','furniture_decor','furniture_living_room')
+           ) THEN 1.2964 ELSE 1.1976 END AS WEIGHT 
+    FROM orders o
+		JOIN items i ON i.order_id = o.order_id
+    WHERE YEAR(o.order_purchase_timestamp) = 2018
+    GROUP BY o.order_id),
+weighted AS (
+    SELECT ORDER_PRICE, WEIGHT,
+           SUM(WEIGHT) OVER (ORDER BY ORDER_PRICE) AS CUM_WEIGHT,
+           SUM(wWEIGHT) OVER () AS TOTAL_WEIGHT
+    FROM order_class)
+SELECT MIN(ORDER_PRICE) AS MEDIAN_2019
+FROM weighted
+WHERE CUM_WEIGHT >= TOTAL_WEIGHT / 2
+ -- Returns 88.89 as median price per item
 
-
-
+-- FINAL CALCULATIONS --
+-- Revenue in 2019 with the furniture promotion plan is 65083 * 1.151 * 88.99 = 6,658,797.28 Brazilian Real or $1,664,699.32 US
+-- Compared to the base 2019 revenue ($1,384,797.25), that's an increase of ~$280,000 or 20% in revenue
