@@ -791,18 +791,6 @@ FROM (SELECT COUNT(DISTINCT order_id) AS NUM_ORDERS_2017
 	 WHERE YEAR(order_purchase_timestamp)=2018) AS ORDERS_2018
  -- Returns order number growth of 19.76% percent between 2017 and 2018
  -- Order count of 54011 for 2018 means that 2019 is estimated to have 64681 total orders 
-
--- ANNUAL ORDER GROWTH: Use two most recent years as reference (2017 and 2018)
--- Will be assumed to be accurate estimate for order growth between 2018 and 2019
-SELECT NUM_ORDERS_2017, NUM_ORDERS_2018, (((NUM_ORDERS_2018 / NUM_ORDERS_2017) - 1) * 100) AS PERCENT_CHANGE
-FROM (SELECT COUNT(DISTINCT order_id) AS NUM_ORDERS_2017
-	 FROM orders
-	 WHERE YEAR(order_purchase_timestamp)=2017) AS ORDERS_2017,
-	 (SELECT COUNT(DISTINCT order_id) AS NUM_ORDERS_2018
-	 FROM orders
-	 WHERE YEAR(order_purchase_timestamp)=2018) AS ORDERS_2018
- -- Returns order number growth of 19.76% percent between 2017 and 2018
- -- Order count of 54011 for 2018 means that 2019 is estimated to have 64681 total orders 
  -- Hence, our baseline revenue for 2019 is Number of Orders * AIPO (assuming base AIPO is unchanged from 2018) * Median Price per order
  -- 2019 base revenue = 64681 * 1.142 * 74.99 = 5,534,338.56 Braziian Real (or $1,384,797.25 given an exchange rate of 0.25 USD = 1 BR)
 
@@ -865,7 +853,7 @@ WITH order_class AS (
 weighted AS (
     SELECT ORDER_PRICE, WEIGHT,
            SUM(WEIGHT) OVER (ORDER BY ORDER_PRICE) AS CUM_WEIGHT,
-           SUM(wWEIGHT) OVER () AS TOTAL_WEIGHT
+           SUM(WEIGHT) OVER () AS TOTAL_WEIGHT
     FROM order_class)
 SELECT MIN(ORDER_PRICE) AS MEDIAN_2019
 FROM weighted
