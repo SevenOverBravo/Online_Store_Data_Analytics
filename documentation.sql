@@ -863,3 +863,10 @@ WHERE CUM_WEIGHT >= TOTAL_WEIGHT / 2
 -- FINAL CALCULATIONS --
 -- Revenue in 2019 with the furniture promotion plan is 65083 * 1.151 * 88.99 = 6,658,797.28 Brazilian Real or $1,664,699.32 US
 -- Compared to the base 2019 revenue ($1,384,797.25), that's an increase of ~$280,000 or 20% in revenue
+
+
+-- VISUALIZATIONS TO INCLUDE
+-- Bar Charts: Number of Orders/AIPO/Median Price per Item for each year
+-- Pie Charts: Percentage of furniture/non-furniture related orders in 2017 and 2018
+-- Pie Charts: Percentage of furniture/non-furniture orders with and without furniture analysis plan in 2019
+-- Bar Chart: 2018/2019 revenue with and without furniture promotion plan
