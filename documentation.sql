@@ -858,11 +858,11 @@ weighted AS (
 SELECT MIN(ORDER_PRICE) AS MEDIAN_2019
 FROM weighted
 WHERE CUM_WEIGHT >= TOTAL_WEIGHT / 2
- -- Returns 88.89 as median price per item
+ -- Returns 76.50 as median price per item
 
 -- FINAL CALCULATIONS --
--- Revenue in 2019 with the furniture promotion plan is 65083 * 1.151 * 88.99 = 6,658,797.28 Brazilian Real or $1,664,699.32 US
--- Compared to the base 2019 revenue ($1,384,797.25), that's an increase of ~$280,000 or 20% in revenue
+-- Revenue in 2019 with the furniture promotion plan is 65083 * 1.151 * 76.50 = 5,730,655.77 Brazilian Real or $1,432,663.94 US
+-- Compared to the base 2019 revenue ($1,384,797.25), that's an increase of ~$50,000 or 3.5% in revenue
 
 
 -- VISUALIZATIONS TO INCLUDE
