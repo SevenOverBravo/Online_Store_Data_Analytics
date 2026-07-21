@@ -837,27 +837,27 @@ SELECT ((1.138 * (54011 - 4048) * 1.1976)/65083) + ((1.295 * 5247)/65083)
  -- Returns 2019 AIPO of 1.151
 
 -- MEDIAN PRICE PER ITEM IN 2019: Calculate weighted median price per item in 2019
-WITH order_class AS (
-    SELECT o.order_id,
-           SUM(i.price) AS ORDER_PRICE,
+WITH item_class (price, WEIGHT) AS (
+    SELECT i.price,
            CASE WHEN EXISTS (
                SELECT 1 FROM items i
                JOIN products p ON p.product_id = i.product_id
-               WHERE i.order_id = o.order_id
+               WHERE i.order_id = i.order_id
                  AND p.product_category_name IN ('office_furniture','furniture_decor','furniture_living_room')
-           ) THEN 1.2964 ELSE 1.1976 END AS WEIGHT 
-    FROM orders o
-		JOIN items i ON i.order_id = o.order_id
+           ) THEN 1.2964 ELSE 1.1976 END AS WEIGHT
+    FROM items i
+    JOIN orders o ON o.order_id = i.order_id
     WHERE YEAR(o.order_purchase_timestamp) = 2018
-    GROUP BY o.order_id),
-weighted AS (
-    SELECT ORDER_PRICE, WEIGHT,
-           SUM(WEIGHT) OVER (ORDER BY ORDER_PRICE) AS CUM_WEIGHT,
+),
+weighted (price, WEIGHT) AS (
+    SELECT price, WEIGHT,
+           SUM(WEIGHT) OVER (ORDER BY price) AS CUM_WEIGHT,
            SUM(WEIGHT) OVER () AS TOTAL_WEIGHT
-    FROM order_class)
-SELECT MIN(ORDER_PRICE) AS MEDIAN_2019
+    FROM item_class
+)
+SELECT MIN(price) AS PROJECTED_MEDIAN_PRICE_2019
 FROM weighted
-WHERE CUM_WEIGHT >= TOTAL_WEIGHT / 2
+WHERE CUM_WEIGHT >= TOTAL_WEIGHT / 2;
  -- Returns 76.50 as median price per item
 
 -- FINAL CALCULATIONS --
