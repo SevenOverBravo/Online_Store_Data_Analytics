@@ -18,7 +18,9 @@ Once revenue for each 2019 scenario is calculated, they'll each be measured agai
 Hence, the goal of this analysis is as follows: "Utilize Olist customer and order records to detect traits of customers, orders, sellers, or products that show signs of a higher quantity of average items purchased per order, eventually proposing a solution to increase said metric so that annual revenue in 2019 will increase by at least 10% from a control"
 
 ## Key Findings and Results
+The analysis in MySQL found a series of attributes that correlate with an above average AIPO, including the following:
 
-### Promotion Plan
+* Product Category: Orders that included items from any of the furniture product categories had higher AIPOs than those that didn't, which is further corroborated by the high order counts associated with furniture items
+* 
 
 ## Future Research
