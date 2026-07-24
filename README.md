@@ -11,8 +11,9 @@ In pursuit of identifying means to increase revenue, the anlysis will focus on t
 To find the total affect of emphasizing certain customer, order, seller, or product characteristics on the Olist website, revenue from 2018 (the most recent year in the dataset) and two scenarios in 2019 (revenue with and without promotion plan) will be calculated using the following formula: Revenue = Number of Orders * AIPO * Median Price per Item (median will be used as a measure of average price per item instead of mean, as the price column contains many large outliers). In finding the these figures for 2019, the following will be assumed:
 
 * The growth in number of orders from 2017 to 2018 is roughly identical to that of 2018 to 2019
-* Both AIPO and median price per item in 2019 remain the same from 2018
-* 
+* Both AIPO and median price per item in 2019 are equal to those in 2018
+
+Once revenue for each 2019 scenario is calculated, they'll each be measured against the 2018 revenue figure to find the percent growth in revenue between them. Finally, the total affect of the promotion plan will be represented within the percent growth between 2018 and the 2019 scenario with the promotion plan minus that between 2018 and the 2019 without it. 
 
 Hence, the goal of this analysis is as follows: "Utilize Olist customer and order records to detect traits of customers, orders, sellers, or products that show signs of a higher quantity of average items purchased per order, eventually proposing a solution to increase said metric so that annual revenue in 2019 will increase by at least 10% from a control"
 
