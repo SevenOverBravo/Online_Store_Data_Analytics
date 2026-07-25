@@ -34,6 +34,7 @@ After creating both scenarios for 2019, the following totals were obtained:
 |---|---|---|---|---|---|---|---|
 | 2019, No Promotion | 59,836 | 4,847 | 1.142 | $74.99 | 64,681 | $1,384,797.25 | 19.76% |
 | 2019, With Promotion | 59,836 | 5,248 | 1.151 | $76.50 | 65,083 | $1,432,663.94 | 23.89% |
+
 Note: Revenue for 2018 is $1,158,283.30
 
 The table indicates that, with the promotion plan, the estimated revenue from 2019 increases by a margin of 4.1% or ~$50,000. Not only is this figure below the benchmark of 10%, but when factoring in the potential costs of the promotion plan, it's likely that a portion of the revenue increase could be eaten up by marketing provisions. Furthermore, it's worth nothing that AIPO, despite being the target metric of this analysis, barely grew as a result of the promotion plan, with most of the revenue increase resulting from improved order counts and a higher median price per item.
