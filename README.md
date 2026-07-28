@@ -17,6 +17,16 @@ Once revenue for each 2019 scenario is calculated, they'll each be measured agai
 
 Hence, the goal of this analysis is as follows: "Utilize Olist customer and order records to detect traits of customers, orders, sellers, or products that show signs of a higher quantity of average items purchased per order, eventually proposing a solution to increase said metric so that annual revenue in 2019 will increase by at least 10% from a control"
 
+### Notes on Data Cleaning
+Before the analysis could begin, there were a host of issues plaguing the usability of the Olist dataset. Hence, the following measures were taken in Excel:
+
+* Replace all accented/special Brazilian Portuguese characters with their English language counterparts (i.e. "á" becomes "a", "õ" becomes "o", and "ç" becomes "c") to ensure no errors would arise from any symbols outside of the UTF-8 file format
+  * It's true that some Portuguese words change their meaning when certain letters are not accented, but since this analysis won't utilize any string data (at   least, not in any context where the meaning of each string is important), such a measure is defensible
+* Reformat all datetime values so they're compatible with MySQL (i.e. format so each datetime values reads as YYYY-MM-DD hh:mm:ss)
+* Remove all incomplete orders (i.e. rows in the orders table without any purchase timestamps) from the dataset
+* Aggregate geolocation entries on zip code to give the table its primary key
+  * The "city" and "state" entries in each aggregated row were filled with the city and state associated with each zip code, while the each latitude and longitude value was averaged between all values from each zip code
+
 ## Key Findings and Results
 The analysis in MySQL found a series of attributes that correlate with an above average AIPO, including the following:
 
@@ -44,4 +54,7 @@ A dashboard of useful visualizations is present in the "diagrams" folder.
 ## Conclusion and Future Research
 As evident from the results, the promotion of high AIPO furniture products did not to achieve a significant effect on annual revenue. However, it's worth noting that the promotion plan in question was extremely simple, only advertising a single variety of product out of dozens of categories. There's a possibility that promoting multiple classes of products at once would produce revenue growth conducive to that of the 10% baseline. For example, goods within the home construction and bed & bath categories displayed large order counts (both over 10,000) and above-average AIPOs in regard to the orders they were associated with. If these products were added to the current promotion plan, it's likely that revenue in 2019 would see additional growth through increased AIPO and order numbers.
 
-Speaking of order counts, the findings of this project indicate that AIPO may not have been the most effective metric to focus on. Such a fact is evident when noting that most of the additional revenue growth in the promotion plan scenario was not due to AIPO (which increased by only 0.009), but rather the rise in order count and median price per item. Thus, future research would focus less on increasing average items per order and moreso on the other two factors of the revenue equation. Rather than identifying characteristics of the dataset that correspond with high AIPO, such an analysis would instead focus on promoting attributes associated with high order counts and median price per product. 
+Speaking of order counts, the findings of this project indicate that AIPO may not have been the most effective metric to focus on. Such a fact is evident when noting that most of the additional revenue growth in the promotion plan scenario was not due to AIPO (which increased by only 0.009), but rather the rise in order count and median price per item. Thus, future research would focus less on increasing average items per order and more so on the other two factors of the revenue equation. Rather than identifying characteristics of the dataset that correspond with high AIPO, such an analysis would instead focus on promoting attributes associated with high order counts and median price per product. 
+
+Ultimately, although the AIPO promotion plan proved not to be worth Olist's time, the analysis revealed multiple other paths to take in the pursuit of increasing revenue.
+
