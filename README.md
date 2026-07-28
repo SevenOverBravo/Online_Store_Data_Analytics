@@ -23,7 +23,8 @@ Before the analysis could begin, there were a host of issues plaguing the usabil
 * Replace all accented/special Brazilian Portuguese characters with their English language counterparts (i.e. "á" becomes "a", "õ" becomes "o", and "ç" becomes "c") to ensure no errors would arise from any symbols outside of the UTF-8 file format
   * It's true that some Portuguese words change their meaning when certain letters are not accented, but since this analysis won't utilize any string data (at least, not in any context where the meaning of each string is important), such a measure is defensible
 * Reformat all datetime values so they're compatible with MySQL (i.e. format so each datetime values reads as YYYY-MM-DD hh:mm:ss)
-* Replace all empty empty entries with the "\N" character to indicate null values
+* Replace all empty entries with the "\N" character to indicate null values
+  * Some tables, like the reviews table, were made up of ~35% empty entries 
 * Aggregate geolocation entries on zip code to give the table a primary key in "zip_code_prefix"
   * The "city" and "state" entries in each aggregated row were filled with the city and state most frequently associated with each zip code, while latitude and longitude values were averaged between all values from each respective zip code
 
